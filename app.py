@@ -89,6 +89,17 @@ class ConnectionEvent(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class ConnectionRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    from_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, accepted, rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    from_user = db.relationship('User', foreign_keys=[from_user_id], backref='requests_sent')
+    to_user = db.relationship('User', foreign_keys=[to_user_id], backref='requests_received')
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -294,12 +305,14 @@ def dashboard():
     peers = Peer.query.filter_by(user_id=current_user.id, is_active=True).all()
     notifications = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).all()
     recent_events = ConnectionEvent.query.filter_by(user_id=current_user.id).order_by(ConnectionEvent.timestamp.desc()).limit(10).all()
+    pending_requests = ConnectionRequest.query.filter_by(to_user_id=current_user.id, status='pending').all()
 
     return render_template('dashboard.html', 
                           user=current_user,
                           peers=peers,
                           notifications=notifications,
-                          recent_events=recent_events)
+                          recent_events=recent_events,
+                          pending_requests=pending_requests)
 
 
 @app.route('/settings', methods=['GET', 'POST'])
@@ -351,6 +364,114 @@ def add_peer():
         flash(f'Error connecting to peer: {str(e)}', 'error')
 
     return redirect(url_for('settings'))
+
+
+@app.route('/devices')
+@login_required
+def devices():
+    """List all registered devices for connection"""
+    all_users = User.query.filter(User.id != current_user.id).all()
+    
+    # Get current connections (peers)
+    current_peers = db.session.query(Peer.peer_username).filter_by(user_id=current_user.id).all()
+    current_peer_usernames = [p[0] for p in current_peers]
+    
+    # Get pending requests sent by current user
+    pending_requests_sent = db.session.query(ConnectionRequest.to_user_id).filter_by(
+        from_user_id=current_user.id, status='pending'
+    ).all()
+    pending_sent_ids = [r[0] for r in pending_requests_sent]
+    
+    # Get pending requests received by current user
+    pending_requests_received = ConnectionRequest.query.filter_by(
+        to_user_id=current_user.id, status='pending'
+    ).all()
+    
+    return render_template('devices.html', 
+                          all_users=all_users,
+                          current_peer_usernames=current_peer_usernames,
+                          pending_sent_ids=pending_sent_ids,
+                          pending_requests=pending_requests_received)
+
+
+@app.route('/send-request/<int:user_id>', methods=['POST'])
+@login_required
+def send_request(user_id):
+    """Send connection request to another device"""
+    if user_id == current_user.id:
+        flash('Cannot send request to yourself', 'error')
+        return redirect(url_for('devices'))
+    
+    # Check if request already exists
+    existing_request = ConnectionRequest.query.filter(
+        ((ConnectionRequest.from_user_id == current_user.id) & (ConnectionRequest.to_user_id == user_id)) |
+        ((ConnectionRequest.from_user_id == user_id) & (ConnectionRequest.to_user_id == current_user.id))
+    ).first()
+    
+    if existing_request:
+        flash('Request already exists with this device', 'error')
+        return redirect(url_for('devices'))
+    
+    # Check if already connected
+    existing_peer = Peer.query.filter_by(user_id=current_user.id).filter(
+        Peer.peer_username == User.query.get(user_id).username
+    ).first()
+    
+    if existing_peer:
+        flash('Already connected to this device', 'error')
+        return redirect(url_for('devices'))
+    
+    conn_request = ConnectionRequest(
+        from_user_id=current_user.id,
+        to_user_id=user_id,
+        status='pending'
+    )
+    db.session.add(conn_request)
+    db.session.commit()
+    
+    flash('Connection request sent!', 'success')
+    return redirect(url_for('devices'))
+
+
+@app.route('/respond-request/<int:request_id>/<action>', methods=['POST'])
+@login_required
+def respond_request(request_id, action):
+    """Accept or reject connection request"""
+    conn_request = ConnectionRequest.query.get(request_id)
+    
+    if not conn_request or conn_request.to_user_id != current_user.id:
+        flash('Invalid request', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if action == 'accept':
+        # Get the requesting user's info
+        from_user = User.query.get(conn_request.from_user_id)
+        
+        # Create API key for secure communication
+        api_key = os.urandom(32).hex()
+        
+        # Add as peer (mutual connection)
+        peer = Peer(
+            user_id=current_user.id,
+            peer_username=from_user.username,
+            peer_device_name=from_user.device_name,
+            peer_ip='',  # Will be determined when notifying
+            api_key=api_key,
+            is_active=True
+        )
+        db.session.add(peer)
+        
+        conn_request.status = 'accepted'
+        db.session.commit()
+        
+        flash(f'Connected to {from_user.device_name}!', 'success')
+    
+    elif action == 'reject':
+        conn_request.status = 'rejected'
+        db.session.commit()
+        flash('Request rejected', 'success')
+    
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/logout')

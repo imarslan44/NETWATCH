@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Browse Devices - NetWatch{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="header-left">
+    <h1>🔗 Browse Devices</h1>
+    <p>Discover and connect with other devices</p>
+  </div>
+</div>
+
+<div class="content-grid">
+  <!-- Pending Requests Section -->
+  {% if pending_requests %}
+  <div class="card">
+    <div class="card-header">
+      <h2>📬 Pending Requests</h2>
+      <span class="badge-info">{{ pending_requests|length }}</span>
+    </div>
+    <div class="card-content">
+      {% for req in pending_requests %}
+      <div class="request-item">
+        <div class="request-info">
+          <div class="device-name">{{ req.from_user.device_name }}</div>
+          <div class="device-username">@{{ req.from_user.username }}</div>
+          <div class="request-time">Sent {{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        </div>
+        <div class="request-actions">
+          <form method="POST" action="/respond-request/{{ req.id }}/accept" style="display: inline;">
+            <button type="submit" class="btn btn-success btn-sm">Accept</button>
+          </form>
+          <form method="POST" action="/respond-request/{{ req.id }}/reject" style="display: inline;">
+            <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- All Devices Section -->
+  <div class="card">
+    <div class="card-header">
+      <h2>📱 Available Devices</h2>
+      <span class="badge-info">{{ all_users|length }}</span>
+    </div>
+    <div class="card-content">
+      {% if all_users %}
+        {% for user in all_users %}
+        <div class="device-item">
+          <div class="device-info">
+            <div>
+              <div class="device-name">{{ user.device_name }}</div>
+              <div class="device-username">@{{ user.username }}</div>
+            </div>
+            <div class="device-status">
+              <span class="status-badge {% if user.last_status == 'online' %}online{% else %}offline{% endif %}">
+                {{ user.last_status|upper }}
+              </span>
+            </div>
+          </div>
+          <div class="device-actions">
+            {% if user.username in current_peer_usernames %}
+              <button class="btn btn-disabled btn-sm" disabled>Connected</button>
+            {% elif user.id in pending_sent_ids %}
+              <button class="btn btn-pending btn-sm" disabled>Request Sent</button>
+            {% else %}
+              <form method="POST" action="/send-request/{{ user.id }}" style="display: inline;">
+                <button type="submit" class="btn btn-primary btn-sm">Send Request</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <p>No other devices registered yet</p>
+          <small>Other devices will appear here once they create accounts</small>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .page-header {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+
+  .page-header p {
+    color: var(--text2);
+    font-size: 13px;
+  }
+
+  .content-grid {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border2);
+    background: rgba(0,212,170,0.02);
+  }
+
+  .card-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .badge-info {
+    background: var(--accent2);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .card-content {
+    padding: 0;
+  }
+
+  .request-item, .device-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border2);
+    transition: background 0.15s ease;
+  }
+
+  .request-item:hover, .device-item:hover {
+    background: rgba(0,212,170,0.02);
+  }
+
+  .request-item:last-child, .device-item:last-child {
+    border-bottom: none;
+  }
+
+  .request-info, .device-info {
+    flex: 1;
+  }
+
+  .device-name {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .device-username {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+
+  .request-time {
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  .device-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .device-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .status-badge.online {
+    background: rgba(46,213,115,0.15);
+    color: var(--success);
+  }
+
+  .status-badge.offline {
+    background: rgba(255,71,87,0.15);
+    color: var(--danger);
+  }
+
+  .request-actions, .device-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .btn-primary {
+    background: var(--accent2);
+    color: white;
+    border-color: var(--accent2);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 16px rgba(0,153,255,0.3);
+  }
+
+  .btn-success {
+    background: rgba(46,213,115,0.15);
+    color: var(--success);
+    border-color: var(--success);
+  }
+
+  .btn-success:hover {
+    background: var(--success);
+    color: white;
+  }
+
+  .btn-danger {
+    background: rgba(255,71,87,0.15);
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .btn-danger:hover {
+    background: var(--danger);
+    color: white;
+  }
+
+  .btn-pending, .btn-disabled {
+    background: var(--border2);
+    color: var(--text3);
+    border-color: var(--border2);
+    cursor: not-allowed;
+  }
+
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text2);
+  }
+
+  .empty-state p {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .empty-state small {
+    color: var(--text3);
+  }
+</style>
+{% endblock %}
