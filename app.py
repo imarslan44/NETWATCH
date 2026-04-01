@@ -112,20 +112,25 @@ def is_connected_to_internet() -> bool:
     try:
         param = '-n' if platform.system().lower() == 'windows' else '-c'
         timeout_param = '-w' if platform.system().lower() == 'windows' else '-W'
+        # Ping with 5000ms (5 second) timeout - gives enough time for response
         result = subprocess.run(
-            ['ping', param, '1', timeout_param, '2', '8.8.8.8'],
+            ['ping', param, '1', timeout_param, '5000', '8.8.8.8'],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=5
+            timeout=10
         )
-        return result.returncode == 0
-    except Exception:
+        is_online = result.returncode == 0
+        print(f"[Monitor] Internet check: {'ONLINE' if is_online else 'OFFLINE'}")
+        return is_online
+    except Exception as e:
+        print(f"[Monitor] Ping failed: {e}")
         return False
 
 
 def send_email(to_email: str, subject: str, body: str) -> bool:
     """Send email notification using Gmail SMTP"""
     try:
+        print(f"[Email] Attempting to send to {to_email}...")
         # Using Gmail SMTP (you can change to another provider)
         smtp_server = "smtp.gmail.com"
         smtp_port = 587
@@ -141,15 +146,21 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         message.attach(MIMEText(body, "plain"))
         
         # Send email
+        print(f"[Email] Connecting to {smtp_server}:{smtp_port}...")
         with smtplib.SMTP(smtp_server, smtp_port) as server:
+            print(f"[Email] Starting TLS...")
             server.starttls()
+            print(f"[Email] Logging in...")
             server.login(sender_email, sender_password)
+            print(f"[Email] Sending message...")
             server.send_message(message)
         
-        print(f"Email sent to {to_email}: {subject}")
+        print(f"[Email] ✓ Email sent to {to_email}: {subject}")
         return True
     except Exception as e:
-        print(f"Failed to send email: {str(e)}")
+        print(f"[Email] ✗ Failed to send email to {to_email}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -199,7 +210,8 @@ def monitor_loop():
     global _monitor_running
     print("Internet monitor started")
 
-    previous_status = 'unknown'
+    # Track previous status per user
+    user_previous_status = {}
 
     while _monitor_running:
         try:
@@ -208,9 +220,12 @@ def monitor_loop():
                 for user in User.query.all():
                     is_online = is_connected_to_internet()
                     current_status = 'online' if is_online else 'offline'
+                    
+                    # Get previous status for this specific user
+                    previous_status = user_previous_status.get(user.id, 'unknown')
 
                     # Status changed
-                    if current_status != previous_status:
+                    if current_status != previous_status and previous_status != 'unknown':
                         user.last_status = current_status
                         user.last_status_change = datetime.utcnow()
 
@@ -224,8 +239,13 @@ def monitor_loop():
                         message = f"{user.device_name} is now {'ONLINE' if is_online else 'OFFLINE'}"
                         notify_peers(user.id, event_type='connected' if is_online else 'disconnected', message=message)
                         print(f"[{user.username}] {message}")
-
-                    previous_status = current_status
+                    else:
+                        # Just update status without notifying (no change)
+                        user.last_status = current_status
+                        db.session.commit()
+                    
+                    # Store status for next iteration
+                    user_previous_status[user.id] = current_status
 
             time.sleep(30)  # Check every 30 seconds
 
