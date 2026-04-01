@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - NetWatch P2P{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .status-online { background: #4caf50; color: white; }
+    .status-offline { background: #ff4757; color: white; }
+    .status-unknown { background: #ffa502; color: white; }
+    
+    .event-item {
+        padding: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .event-item:last-child { border-bottom: none; }
+    .event-time { color: rgba(255, 255, 255, 0.6); font-size: 0.9rem; }
+    
+    .notification-item {
+        padding: 1rem;
+        background: rgba(0, 212, 170, 0.1);
+        border-left: 3px solid #00d4aa;
+        margin-bottom: 1rem;
+        border-radius: 5px;
+    }
+    .notification-item.unread { background: rgba(0, 212, 170, 0.2); }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">Dashboard</h1>
+
+<div class="grid">
+    <!-- My Status Card -->
+    <div class="card">
+        <h2>My Device</h2>
+        <p style="margin: 1rem 0;">
+            <strong>{{ user.device_name }}</strong><br>
+            Status: <span class="status-badge status-{{ user.last_status }}">{{ user.last_status.upper() }}</span>
+        </p>
+        {% if user.last_status_change %}
+        <p style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem;">
+            Last changed: {{ user.last_status_change.strftime('%Y-%m-%d %H:%M:%S') }}
+        </p>
+        {% endif %}
+    </div>
+    
+    <!-- Connected Peers -->
+    <div class="card">
+        <h2>Connected Peers</h2>
+        {% if peers %}
+        <ul style="list-style: none;">
+            {% for peer in peers %}
+            <li style="padding: 0.7rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                {{ peer.peer_device_name }}<br>
+                <small style="color: rgba(255, 255, 255, 0.6);">{{ peer.peer_ip }}</small>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: rgba(255, 255, 255, 0.5);">No peers connected. <a href="{{ url_for('settings') }}" style="color: #00d4aa;">Add a peer</a></p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Notifications -->
+{% if notifications %}
+<div class="card" style="margin-bottom: 2rem;">
+    <h2>Recent Notifications</h2>
+    {% for notif in notifications %}
+    <div class="notification-item {% if not notif.is_read %}unread{% endif %}">
+        <strong>{{ notif.from_device }}</strong> - {{ notif.event_type.upper() }}<br>
+        <small style="color: rgba(255, 255, 255, 0.7);">{{ notif.message }}<br>{{ notif.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent Events -->
+<div class="card">
+    <h2>Your Connection Events</h2>
+    {% if recent_events %}
+    <div>
+        {% for event in recent_events %}
+        <div class="event-item">
+            <div>
+                <strong>{{ event.event_type.upper() }}</strong>
+            </div>
+            <span class="event-time">{{ event.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: rgba(255, 255, 255, 0.5);">No events yet. The monitor is running!</p>
+    {% endif %}
+</div>
+{% endblock %}

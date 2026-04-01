@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - NetWatch P2P{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">Settings</h1>
+
+<!-- Update Device Name -->
+<div class="card" style="margin-bottom: 2rem;">
+    <h2>My Device</h2>
+    <form method="POST">
+        <div class="input-group">
+            <label for="device_name">Device Name</label>
+            <input type="text" id="device_name" name="device_name" value="{{ user.device_name }}" placeholder="e.g. My Phone">
+        </div>
+
+        <!-- Email Configuration -->
+        <div style="margin-top: 2rem;">
+            <h3 style="margin-bottom: 1rem;">Email Notifications</h3>
+            <div class="input-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" value="{{ user.email or '' }}" placeholder="your.email@gmail.com">
+            </div>
+            
+            <div class="input-group">
+                <label style="display: flex; align-items: center; font-weight: normal;">
+                    <input type="checkbox" id="email_enabled" name="email_enabled" {% if user.email_enabled %}checked{% endif %} style="width: auto; margin-right: 0.5rem;">
+                    Send email alerts when connection changes
+                </label>
+            </div>
+            
+            <p style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem; margin-top: 1rem;">
+                ⚠️ <strong>Note:</strong> Email alerts require Gmail SMTP configuration in app.py<br>
+                Replace "netwatch.alerts@gmail.com" and your app-specific password in the code.
+            </p>
+        </div>
+
+        <button type="submit" class="btn" style="margin-top: 2rem;">Update Settings</button>
+    </form>
+</div>
+
+<!-- Add Peer -->
+<div class="card" style="margin-bottom: 2rem;">
+    <h2>Add a Peer Device</h2>
+    <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 1rem;">
+        To add a peer, you need the IP address of the device running NetWatch that you want to connect to.
+    </p>
+    <form method="POST" action="{{ url_for('add_peer') }}">
+        <div class="input-group">
+            <label for="peer_ip">Peer Device IP Address</label>
+            <input type="text" id="peer_ip" name="peer_ip" required placeholder="e.g. 192.168.1.100">
+        </div>
+        <div class="input-group">
+            <label for="peer_device_name">Peer Device Name</label>
+            <input type="text" id="peer_device_name" name="peer_device_name" required placeholder="e.g. Dad's Phone">
+        </div>
+        <button type="submit" class="btn">Add Peer</button>
+    </form>
+</div>
+
+<!-- Account -->
+<div class="card">
+    <h2>Account</h2>
+    <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 1rem;">
+        <strong>Username:</strong> {{ user.username }}<br>
+        <strong>Account Created:</strong> {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+    </p>
+    <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+</div>
+{% endblock %}
